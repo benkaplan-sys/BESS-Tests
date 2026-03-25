@@ -1,0 +1,7 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`simulationPipeline integration > matches snapshot for canonical config (seed=42, 100 trials) 1`] = `18609088.40816503`;
+
+exports[`simulationPipeline integration > matches snapshot for canonical config (seed=42, 100 trials) 2`] = `16529615.909245903`;
+
+exports[`simulationPipeline integration > matches snapshot for canonical config (seed=42, 100 trials) 3`] = `20871251.67269546`;

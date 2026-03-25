@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(cmd //c \"where node\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem -Path ''C:\\\\Program Files\\\\nodejs'' -ErrorAction SilentlyContinue | Select-Object Name; Get-ChildItem -Path \"\"$env:APPDATA\\\\npm\"\" -ErrorAction SilentlyContinue | Select-Object Name; Get-ChildItem -Path \"\"$env:LOCALAPPDATA\\\\nvm\"\" -ErrorAction SilentlyContinue | Select-Object Name\")",
+      "Bash(export PATH=\"$PATH:/c/Program Files/nodejs:/c/Users/Benjamin Kaplan/AppData/Roaming/npm\")",
+      "Bash(export PATH=\"$PATH:/c/Program Files/nodejs:/c/Users/Benjamin Kaplan/AppData/Roaming/npm:/usr/bin\")",
+      "Bash(npm test:*)",
+      "Bash(npm run:*)"
+    ]
+  }
+}

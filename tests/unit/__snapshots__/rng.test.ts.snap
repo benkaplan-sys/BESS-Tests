@@ -1,0 +1,9 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SeededRNG > reproducibility > snapshot: seed=0 1`] = `0.26642920868471265`;
+
+exports[`SeededRNG > reproducibility > snapshot: seed=1 1`] = `0.6270739405881613`;
+
+exports[`SeededRNG > reproducibility > snapshot: seed=2^32-1 1`] = `0.8964226141106337`;
+
+exports[`SeededRNG > reproducibility > snapshot: seed=42 produces known first value 1`] = `0.6011037519201636`;
