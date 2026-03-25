@@ -17,8 +17,9 @@ import ErrorBoundary from '@/components/shared/ErrorBoundary';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import ValidationMessage from '@/components/shared/ValidationMessage';
 import ExcelImportExport from '@/components/shared/ExcelImportExport';
+import CalibrationPage from '@/pages/CalibrationPage';
 
-type Tab = 'simulate' | 'saved';
+type Tab = 'simulate' | 'saved' | 'calibrate';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('simulate');
@@ -67,6 +68,12 @@ export default function App() {
               onClick={() => setActiveTab('saved')}
             >
               Saved Configurations
+            </button>
+            <button
+              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${activeTab === 'calibrate' ? 'bg-white text-blue-800' : 'text-blue-200 hover:text-white'}`}
+              onClick={() => setActiveTab('calibrate')}
+            >
+              Calibrate
             </button>
           </div>
         </div>
@@ -201,6 +208,18 @@ export default function App() {
         {activeTab === 'saved' && (
           <ErrorBoundary>
             <ConfigList onLoad={handleLoadConfig} />
+          </ErrorBoundary>
+        )}
+
+        {activeTab === 'calibrate' && (
+          <ErrorBoundary>
+            <CalibrationPage
+              onApplyConfig={(config) => {
+                setConfig(config);
+                setResult(null);
+                setActiveTab('simulate');
+              }}
+            />
           </ErrorBoundary>
         )}
       </main>

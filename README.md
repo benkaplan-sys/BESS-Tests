@@ -32,17 +32,23 @@ The UI renders a compact 10-cell grid per direction per season, with an SVG spar
 
 A collapsible panel debounces 600 ms after any input change and runs a 200-trial mini-simulation synchronously on the main thread. It renders three fan charts side-by-side: Combined Revenue (total annual), Normal-Day Revenue, and High-Day Revenue. Because only 200 trials are used, this completes fast enough to feel interactive without blocking the UI.
 
-### 4. Scenario Divergence (Cumulative Annual Drift)
+### 4. Path-Dependent Momentum (Revenue-Anchored Annual Accumulation)
 
-The previous rolling-window momentum approach has been replaced with a proper **cumulative annual random walk** that genuinely widens the scenario fan over time:
-- Each trial samples one independent annual shock per year: `N(0, annualDriftSigma)`
-- This shock accumulates permanently: `cumulativeDrift[y] = cumulativeDrift[y-1] + shock_y`
-- Every day in year y uses `adjustedMu = baseMu + cumulativeDrift`
-- Drift std across trials grows as `annualDriftSigma × √year` — the fan widens exactly like compound divergence, with no mean-reversion
-- When disabled, zero extra RNG draws — exact backward compatibility with pre-feature results
-- UI shows live estimated P90/P10 spread at Year 5 and Year 10 based on the chosen sigma
+Each trial accumulates a **non-reverting drift** driven by its own realized revenues. At the end of every year, the trial's annual log-revenue per day is compared to the year's stationary baseline; the deviation is scaled by `pathWeight` and added permanently to a cumulative drift applied to all future years:
 
-Config: `momentum: { enabled: boolean; annualDriftSigma: number }` — `annualDriftSigma` in range [0, 0.5]. At σ=0.10, Year-10 P90 is ~1.5× median; at σ=0.20, ~2.3× median.
+```
+deviation[y]     = log(annualRevenue[y] / 365) − baselineLogMean[y]
+cumulativeDrift += pathWeight × deviation[y]
+adjustedMu[y+1]  = baseMu[regime] + cumulativeDrift
+```
+
+- Trials that run above baseline accumulate a permanent upward mu shift — they stay high
+- Trials that run below baseline drift down symmetrically — they stay low
+- No mean reversion at any time horizon
+- Effect is symmetric in log-space; both tails widen proportionally
+- When disabled, zero extra computation — bit-exact backward compatibility
+
+Config: `momentum: { enabled: boolean; pathWeight: number }` — `pathWeight` in `[0, 1]`. `0.10–0.25` is the recommended range. Use the Live Preview fan chart to calibrate visually.
 
 ### 5. Excel Import/Export Template
 
@@ -93,20 +99,21 @@ Within each regime, daily revenue is drawn from a log-normal distribution parame
 
 Separate distribution parameters are specified per year (10 years total) and per regime (normal / high). A warning is emitted if the implied arithmetic mean for high days does not exceed that for normal days.
 
-### Scenario Divergence (Cumulative Annual Drift)
+### Path-Dependent Momentum
 
-The **Scenario Divergence** feature adds a persistent random walk to each trial's revenue baseline. At the start of each year, an annual shock `δ_y ~ N(0, σ)` is drawn and accumulated:
+The **momentum** feature creates non-reverting path divergence anchored to each trial's own realized revenues. Each trial maintains a `cumulativeDrift` (log-space mu offset). At the end of every year the drift is updated:
 
 ```
-cumulativeDrift[0] = 0
-cumulativeDrift[y] = cumulativeDrift[y-1] + δ_y,   δ_y ~ N(0, annualDriftSigma)
+baselineLogMean  = piN × normal.mu + piH × high.mu     (stationary-weighted)
+deviation[y]     = log(annualRevenue[y] / 365) − baselineLogMean
+cumulativeDrift += pathWeight × deviation[y]
 
-adjustedMu[day] = baseMu[regime] + cumulativeDrift[year]
+adjustedMu[y+1]  = baseMu[regime] + cumulativeDrift
 ```
 
-The standard deviation of `cumulativeDrift` across trials at year y is `annualDriftSigma × √y`, so the scenario fan widens proportionally to the square root of time — exactly like Brownian motion. Scenarios that drift high in early years remain high throughout the simulation; those that drift low stay low. This creates realistic long-term tail scenarios without mean-reversion.
+Trials that realize above-baseline revenues accumulate a permanent positive drift; below-baseline trials drift down. Because the update is additive and unbounded, there is no mean reversion at any time horizon — the fan widens monotonically. The effect is symmetric in log-space: a +Δ drift and a −Δ drift produce equal percentage changes in either direction (in dollar terms the right tail widens slightly more due to the log-normal shape, which is unavoidable).
 
-**Key property**: When `enabled = false`, no extra RNG draws occur, preserving bit-exact reproducibility of all pre-feature results.
+**Key property**: When `enabled = false`, `cumulativeDrift` stays at zero and no extra computation occurs, preserving bit-exact reproducibility of pre-feature results.
 
 ### Season Definition
 
@@ -152,11 +159,12 @@ interface TransitionMatrix {
 interface MomentumConfig {
   enabled: boolean;
   /**
-   * Annual drift standard deviation (log-space). Range [0, 0.5].
-   * Controls how fast scenarios diverge over time.
-   * 0.10 → Year-10 P90 ≈ 1.5× median | 0.20 → Year-10 P90 ≈ 2.3× median
+   * Drift accumulation scale. Range [0, 1].
+   * Each year's log-revenue deviation from the stationary baseline is multiplied
+   * by this factor and added permanently to future years' mu.
+   * 0.10–0.25 is recommended. Higher values produce faster fan widening.
    */
-  annualDriftSigma: number;
+  pathWeight: number;
 }
 
 interface SavedConfig {
@@ -197,7 +205,7 @@ src/
       YearTabPanel.tsx                 # Per-year input tabs with granular copy controls
       MarkovInputs.tsx                 # 10-cell transition probability grids + sparklines
       DistributionInputs.tsx           # Normal/high log-normal parameter inputs
-      MomentumInput.tsx                # MomentumConfig UI (window, weight, enable toggle)
+      MomentumInput.tsx                # MomentumConfig UI (drift scale slider + enable toggle)
       SeasonDefinitionInput.tsx        # Month→season assignment grid
       SimSettings.tsx                  # Global settings (trials, seed, start year)
 
@@ -296,7 +304,7 @@ All fields are validated by `src/core/validation.ts`. Errors block simulation; w
 | `years[i].{summer,other}.pNormalToHigh` | Error | Must be an array of exactly 10 values, each strictly in `(0, 1)` |
 | `years[i].{summer,other}.pHighToNormal` | Error | Must be an array of exactly 10 values, each strictly in `(0, 1)` |
 | `years[i]` | Warning | High-day implied arithmetic mean should exceed normal-day mean |
-| `momentum.annualDriftSigma` | Error | Must be finite and in `[0, 0.5]` (validated regardless of `enabled`) |
+| `momentum.pathWeight` | Error | Must be finite and in `[0, 1]` (validated regardless of `enabled`) |
 
 ---
 
